@@ -4,7 +4,7 @@ let predictions = [];
 
 let model;
 let targetLabel = [];
-let state = 'collection';
+let state = false;
 // let state = 'prediction';
 
 let nnResults;
@@ -24,13 +24,25 @@ function setup() {
   // with an array every time new hand poses are detected
   handpose.on('predict', results => {
     predictions = results;
+    if (predictions[0] != undefined) {
+      let inputs = predictions[0].landmarks.flat();
+      if (state == 'collection') {
+        let target = targetLabel;
+        if (targetLabel != undefined) {
+          model.addData(inputs, target);
+          console.log(`${inputs} recorded for label ${targetLabel}`);
+        } else {
+          console.log('Target label not set.');
+        }
+      }
+    }
   });
 
   let options = {
     inputs: 63,
-    outputs: 10,
+    outputs: 3,
     task: 'regression',
-    debug: 'false',
+    debug: true,
   };
 
   model = ml5.neuralNetwork(options);
@@ -41,6 +53,7 @@ function setup() {
 
   createButton('Load Model').mousePressed(onLoadModelClick);
   createButton('Start Prediction').mousePressed(onPredictClick);
+  createButton('Toggle Collection').mousePressed(onCollectClick);
 }
 
 function autoStartPredict() {
@@ -83,15 +96,16 @@ function drawKeypoints() {
 function mousePressed() {
   if (predictions[0] != undefined) {
     let inputs = predictions[0].landmarks.flat();
-    if (state == 'collection') {
-      let target = targetLabel;
-      if (targetLabel != undefined) {
-        model.addData(inputs, target);
-        console.log(`Data recorded for label ${targetLabel}`);
-      } else {
-        console.log('Target label not set.');
-      }
-    } else if (state == 'prediction') {
+    // if (state == 'collection') {
+    //   let target = targetLabel;
+    //   if (targetLabel != undefined) {
+    //     model.addData(inputs, target);
+    //     console.log(`${inputs} recorded for label ${targetLabel}`);
+    //   } else {
+    //     console.log('Target label not set.');
+    //   }
+    // } else
+    if (state == 'prediction') {
       model.predict(inputs, gotResults);
     }
   }
@@ -105,16 +119,17 @@ function gotResults(error, results) {
   console.log(results);
   nnResults = results;
   sendToServer();
-  classify();
+  predictValues();
 }
 
 function keyPressed() {
   if (key == 't') {
     console.log('starting training');
-    state = 'training';
     model.normalizeData();
+    state = 'training';
     let options = {
-      epochs: 200,
+      epochs: 50,
+      batchSize: 12,
     };
     model.train(options, whileTraining, finishedTraining);
   } else if (key == 's') {
@@ -122,18 +137,7 @@ function keyPressed() {
   } else if (key == 'm') {
     model.save();
   } else if (key == 'r') {
-    targetLabel = [
-      random(),
-      random(),
-      random(),
-      random(),
-      random(),
-      random(),
-      random(),
-      random(),
-      random(),
-      random(),
-    ];
+    targetLabel = [round(random(255)), round(random(255)), round(random(255))];
     console.log(targetLabel);
   }
 }
@@ -145,7 +149,7 @@ function finishedTraining() {
   console.log('finished training');
 }
 
-function classify() {
+function predictValues() {
   if (predictions[0] != undefined) {
     let inputs = predictions[0].landmarks.flat();
     model.predict(inputs, gotResults);
@@ -169,10 +173,13 @@ function onLoadModelClick() {
 function restartPredictions() {
   if (loopBroken) {
     loopBroken = false;
-    classify();
+    predictValues();
   }
 }
 
 const sendToServer = () => {
   socket.emit('handpose', nnResults);
 };
+
+const onCollectClick = () =>
+  state === 'collection' ? (state = false) : (state = 'collection');
