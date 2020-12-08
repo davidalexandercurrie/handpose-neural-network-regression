@@ -10,10 +10,14 @@ let state = 'collection';
 let nnResults;
 let loopBroken = false;
 
+let socket;
+
 function setup() {
   createCanvas(640, 480);
   video = createCapture(VIDEO);
   video.size(width, height);
+
+  socket = io.connect();
 
   handpose = ml5.handpose(video, modelReady);
   // This sets up an event that fills the global variable "predictions"
@@ -100,6 +104,7 @@ function gotResults(error, results) {
   }
   console.log(results);
   nnResults = results;
+  sendToServer();
   classify();
 }
 
@@ -167,3 +172,7 @@ function restartPredictions() {
     classify();
   }
 }
+
+const sendToServer = () => {
+  socket.emit('handpose', nnResults);
+};
